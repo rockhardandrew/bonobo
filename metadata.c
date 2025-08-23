@@ -10,6 +10,7 @@ int seperatemetadata(char *file, size_t filelength)
     if (file[0] != '{') {
 	return 0;
     }
+    int quotes = 0;
     int braces = 1;
     int i = 1;
     while (braces != 0) {
@@ -18,11 +19,18 @@ int seperatemetadata(char *file, size_t filelength)
 	    return -1;
 	}
 	switch (file[i]) {
+	case '"':
+	    quotes ^= 1;
+	    break;
 	case '{':
-	    braces++;
+	    if (!quotes) {
+		braces++;
+	    }
 	    break;
 	case '}':
-	    braces--;
+	    if (!quotes) {
+		braces--;
+	    }
 	    break;
 	default:
 	    /* do nothing */
