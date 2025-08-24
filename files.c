@@ -138,8 +138,8 @@ void recursedir(char *leadingpath)
 	int outsize = strlen(outpath);
 	inpath[insize] = '/';
 	outpath[outsize] = '/';
-	strwrite(inpath, leadingpath, insize + 1, strlen(inpath) - insize);
-	strwrite(outpath, leadingpath, outsize + 1, strlen(outpath) - outsize);
+	strwrite(inpath, leadingpath, insize + 1, 4095 - insize);
+	strwrite(outpath, leadingpath, outsize + 1, 4095 - outsize);
     }
     if (inpath[4095] != '\0' || outpath[4095] != '\0') {
 	fprintf(stderr, "memory error\n");
@@ -174,6 +174,10 @@ void recursedir(char *leadingpath)
 		*strrchr(outpath, '/') = '\0';
 	    }
 	}
+    }
+    if (leadingpath != NULL) {
+	*strrchr(inpath, '/') = '\0';
+	*strrchr(outpath, '/') = '\0';
     }
     closedir(dr);
     return;
