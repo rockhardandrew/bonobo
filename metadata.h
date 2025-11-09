@@ -1,6 +1,7 @@
 #ifndef BONOBO_METADATA_HEADER
 #define BONOBO_METADATA_HEADER
 #include <stdio.h>
+#include <time.h>
 typedef struct {
     char *json;
     char *markdown;
@@ -11,10 +12,12 @@ typedef struct {
     char description[301];
     char language[11];		/* even though most language codes fit in 5 bytes (es-CO for example), some don't (uz-Cyrl-UZ) */
     char css[401];		/* pls don't make your css path too long thats dumb */
+    char date[11];		/* put it in American format MM/DD/YYYY */
 } metadata;
 int seperatemetadata(char *file, size_t filelength);
 filelayout splitfile(char *file, int position);
 metadata parsemetadata(char *json, int size);
+time_t datetotime(char *date);
 metadata setdefaults();
 extern metadata defaults;
 #endif

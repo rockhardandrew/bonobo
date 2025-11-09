@@ -1,6 +1,7 @@
 #include "metadata.h"
 #include "third-party/jsmn.h"
 #include <string.h>
+#include <stdlib.h>
 
 /* shows where metadata ends and markdown file starts
  * returns -1 if no metadata found
@@ -74,11 +75,43 @@ filelayout splitfile(char *file, int position)
     return fl;
 }
 
+/* converts date (MM/DD/YYYY) to time_t value */
+time_t datetotime(char *date)
+{
+    char *month;
+    char *day;
+    char *year;
+    char *rest = date;
+    month = strtok_r(rest, "/", &rest);
+    if (strlen(month) != 2) {
+	return -1;
+    }
+    day = strtok_r(rest, "/", &rest);
+    if (strlen(day) != 2) {
+	return -1;
+    }
+    year = strtok_r(rest, "/", &rest);
+    if (strlen(year) != 4) {
+	return -1;
+    }
+    time_t time;
+    struct tm timestruct;
+    timestruct.tm_year = atoi(year) - 1900;
+    timestruct.tm_mon = atoi(month) - 1;
+    timestruct.tm_mday = atoi(day);
+    timestruct.tm_hour = 0;
+    timestruct.tm_min = 0;
+    timestruct.tm_sec = 1;
+    timestruct.tm_isdst = -1;
+    time = mktime(&timestruct);
+    return time;
+}
 
 /* parse metadata json */
 metadata parsemetadata(char *json, int size)
 {
-    enum parser { NEITHER = 0, TITLE = 1, DESCRIPTION = 2, LANGUAGE = 3, CSS = 4
+    enum parser { NEITHER = 0, TITLE = 1, DESCRIPTION = 2, LANGUAGE = 3, CSS =
+	    4, DATE = 5
     };
     enum parser state = NEITHER;
     metadata metad;
@@ -90,8 +123,8 @@ metadata parsemetadata(char *json, int size)
 	fprintf(stderr, "failed to parse metadata\n");
 	return defaults;
     }
-    int titlefound, descriptionfound, languagefound, cssfound;
-    titlefound = descriptionfound = languagefound = cssfound = 0;
+    int titlefound, descriptionfound, languagefound, cssfound, datefound;
+    titlefound = descriptionfound = languagefound = cssfound = datefound = 0;
     for (int i = 0; i < 128; i++) {
 	if (tokens[i].end == 0) {
 	    i = 128;
@@ -130,6 +163,15 @@ metadata parsemetadata(char *json, int size)
 		if (matchescss) {
 		    cssfound = 1;
 		    state = CSS;
+		}
+	    }
+	    if (!datefound && state == NEITHER) {
+		int matchesdate =
+		    matchobjectwithstring(json, tokens[i].start, tokens[i].end,
+					  "date");
+		if (matchesdate) {
+		    datefound = 1;
+		    state = DATE;
 		}
 	    }
 	} else if (tokens[i].type == JSMN_STRING && state == TITLE) {
@@ -185,6 +227,19 @@ metadata parsemetadata(char *json, int size)
 		metad.css[length] = '\0';
 	    }
 	    state = NEITHER;
+	} else if (tokens[i].type == JSMN_STRING && state == DATE) {
+	    int length = tokens[i].end - tokens[i].start;
+	    if (length != 10) {
+		fprintf(stderr,
+			"Warning: invalid input for date field. Format is MM/DD/YYYY\n");
+		datefound = 0;
+	    } else {
+		for (int y = 0; y < length; y++) {
+		    metad.date[y] = json[y + tokens[i].start];
+		}
+		metad.date[length] = '\0';
+	    }
+	    state = NEITHER;
 	} else {
 	    /* do nothing */
 	}
@@ -201,6 +256,9 @@ metadata parsemetadata(char *json, int size)
     }
     if (!titlefound) {
 	metad.title[0] = '\0';
+    }
+    if (!datefound) {
+	metad.date[0] = '\0';
     }
     return metad;
 }

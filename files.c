@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <string.h>
 /* static memory buffers used for buffers */
+void strwrite(char *dest, char *src, int start, int maxsize);
 static char inpath[4096];
 static char outpath[4096];
 void output_callback(const MD_CHAR *text, MD_SIZE size, void *userdata)
@@ -15,6 +16,17 @@ void output_callback(const MD_CHAR *text, MD_SIZE size, void *userdata)
     fwrite(text, 1, size, out);
 }
 
+struct Filenode {
+    char *url;
+    metadata metad;
+    time_t date;
+    struct Filenode *next;
+};
+struct Filelist {
+    struct Filenode *head;
+    size_t count;
+};
+struct Filelist list;
 /* create directory if it doesn't exist 
   returns 0 if directory exists, 1 if directory created succesfully, and -1 if creating directory failed */
 int cdir(char *path)
@@ -33,6 +45,153 @@ int cdir(char *path)
 	return -1;
     }
     return 0;
+}
+
+int appendlist(char *url, metadata metad, time_t date)
+{
+    struct Filenode *node = malloc(sizeof(struct Filenode));
+    node->next = list.head;
+    node->url = url;
+    node->metad = metad;
+    node->date = date;
+    list.head = node;
+    list.count++;
+    return 0;
+}
+
+void freelist()
+{
+    struct Filenode *start = list.head;
+    struct Filenode *next = list.head;
+    for (int i = 0; i < list.count; i++) {
+	free(next->url);
+	next = next->next;
+	free(start);
+	start = next;
+    }
+}
+
+void printlist()
+{
+    struct Filenode *node = list.head;
+    for (int i = 0; i < list.count; i++) {
+	printf("url: %s title: %s date: %s\n", node->url, node->metad.title,
+	       ctime(&node->date));
+	node = node->next;
+    }
+    return;
+}
+
+struct Filenode *merge(struct Filenode *first, struct Filenode *second)
+{
+    if (first == NULL)
+	return second;
+    if (second == NULL)
+	return first;
+    if (first->date >= second->date) {
+	first->next = merge(first->next, second);
+	return first;
+    } else {
+	second->next = merge(first, second->next);
+	return second;
+    }
+}
+
+void splitList(struct Filenode *source, struct Filenode **front,
+	       struct Filenode **back)
+{
+    struct Filenode *fast;
+    struct Filenode *slow;
+    if (source == NULL || source->next == NULL) {
+	*front = source;
+	*back = NULL;
+    } else {
+	slow = source;
+	fast = source->next;
+
+	while (fast != NULL) {
+	    fast = fast->next;
+	    if (fast != NULL) {
+		slow = slow->next;
+		fast = fast->next;
+	    }
+	}
+
+	*front = source;
+	*back = slow->next;
+	slow->next = NULL;
+    }
+}
+
+void mergesort(struct Filenode **headRef)
+{
+    struct Filenode *head = *headRef;
+    struct Filenode *a;
+    struct Filenode *b;
+    if (head == NULL || head->next == NULL)
+	return;
+    splitList(head, &a, &b);
+    mergesort(&a);
+    mergesort(&b);
+    *headRef = merge(a, b);
+}
+
+void genrss()
+{
+    mergesort(&list.head);
+    int dirlen = strlen(outputdir);
+    /* stupid way to write a string? yes. smart way to write a string? i think so */
+    outpath[dirlen++] = '/';
+    outpath[dirlen++] = 'r';
+    outpath[dirlen++] = 's';
+    outpath[dirlen++] = 's';
+    outpath[dirlen++] = '.';
+    outpath[dirlen++] = 'x';
+    outpath[dirlen++] = 'm';
+    outpath[dirlen++] = 'l';
+    outpath[dirlen++] = '\0';
+    FILE *fp = fopen(outpath, "w");
+    if (fp == NULL) {
+	printf("failed to open file %s\n", outpath);
+	return;
+    }
+    if (rsstitle == NULL) {
+	rsstitle = url + 6;
+    }
+    if (rssdesc == NULL) {
+	rssdesc = "Placeholder Description";
+    }
+    fprintf(fp,
+	    "<rss version=\"2.0\">\n <channel>\n\t<title>%s</title>\n\t<link>%s</link>\n\t<description>%s</description>",
+	    rsstitle, url, rssdesc);
+    struct Filenode *node = list.head;
+    for (int i = 0; i < list.count; i++) {
+	char *description;
+	char *title;
+	struct tm *timestruc;
+	char timebuf[80];
+	timestruc = gmtime(&node->date);
+	strftime(timebuf, sizeof(timebuf), "%a, %d %b %Y %H:%M:%S GMT",
+		 timestruc);
+	if (node->metad.description[0] == '\0') {
+	    description = "placeholder description";
+	} else {
+	    description = node->metad.description;
+	}
+	if (node->metad.title[0] == '\0') {
+	    title = "placeholder title";
+	} else {
+	    title = node->metad.title;
+	}
+	fprintf(fp,
+		"\n\t<item>\n\t\t<title>%s</title>\n\t\t<link>%s</link>\n\t\t<language>%s</language>\n\t\t<pubDate>%s</pubdate>\n\t\t<description>%s</description>\n\t</item>\n",
+		title, node->url, node->metad.language, timebuf, description);
+	node = node->next;
+    }
+    fprintf(fp, " </channel>\n</rss>\n");
+    fclose(fp);
+    printf("wrote RSS file %s\n", outpath);
+    return;
 }
 
 void handlefiles(char *inputfile, char *outputfile)
@@ -56,7 +215,6 @@ void handlefiles(char *inputfile, char *outputfile)
 	fprintf(stderr, "failed to read\n");
 	return;
     }
-    fclose(fp);
     file[filesize] = '\0';
     int seperator = seperatemetadata(file, filesize);
     filelayout fl = splitfile(file, seperator);
@@ -95,6 +253,25 @@ void handlefiles(char *inputfile, char *outputfile)
     fprintf(output, "</article>\n</main>\n</body>\n</html>\n");
     fclose(output);
     free(file);
+    if (createrss) {
+	size_t urlsize = strlen(url) + strlen(outputfile) - strlen(outputdir);
+	char *urlpath = malloc(urlsize + 2);
+	snprintf(urlpath, urlsize + 1, "%s%s", url,
+		 outputfile + strlen(outputdir));
+	time_t date;
+	if (metad.date[0] != '\0') {
+	    date = datetotime(metad.date);
+	}
+	if (metad.date[0] == '\0' || date == -1) {
+	    /* if date isn't found in file metadata we use the input file modification date */
+	    struct stat fst;
+	    int fd = fileno(fp);
+	    fstat(fd, &fst);
+	    date = fst.st_mtime;
+	}
+	appendlist(urlpath, metad, date);
+    }
+    fclose(fp);
     printf("succesfully wrote file %s\n", outputfile);
     return;
 }
@@ -131,6 +308,7 @@ void recursedir(char *leadingpath)
 {
 
     if (leadingpath == NULL) {
+	list.count = 0;
 	strncpy(inpath, inputdir, strlen(inputdir));
 	strncpy(outpath, outputdir, strlen(outputdir));
     } else {
