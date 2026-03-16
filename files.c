@@ -125,8 +125,8 @@ void splitList(struct Filenode *source, struct Filenode **front,
 	slow->next = NULL;
     }
 }
-
-void mergesort(struct Filenode **headRef)
+/* mergesort function called mrgsrt to avoid name conflicts with OpenBSD's stdlib */
+void mrgsrt(struct Filenode **headRef)
 {
     struct Filenode *head = *headRef;
     struct Filenode *a;
@@ -134,14 +134,14 @@ void mergesort(struct Filenode **headRef)
     if (head == NULL || head->next == NULL)
 	return;
     splitList(head, &a, &b);
-    mergesort(&a);
-    mergesort(&b);
+    mrgsrt(&a);
+    mrgsrt(&b);
     *headRef = merge(a, b);
 }
 
 void genrss()
 {
-    mergesort(&list.head);
+    mrgsrt(&list.head);
     int dirlen = strlen(outputdir);
     /* stupid way to write a string? yes. smart way to write a string? i think so */
     outpath[dirlen++] = '/';
