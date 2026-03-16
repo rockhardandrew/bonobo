@@ -13,7 +13,7 @@ metadata defaults;
 void printusage(char *programname)
 {
     fprintf(stderr,
-	    "Usage: %s -i <inputdir> -o <outputdir>\nMetadata Defaults, if somethings not specified in the file metadata defaults to these values\n\t-s\tSpecifies what to use as the default stylesheet (defaults to /style.css)\n\t-l\tSpecifies what to use as the default language (defaults to \"en\"\nRSS Options:\n\t-u\tSpecifies website url\n\t-t\tSpecifies website title\n\t-d\tSpecifies website description\n\t-n\tdisables RSS\n",
+	    "Usage: %s -i <inputdir> -o <outputdir>\nMetadata Defaults, if somethings not specified in the file metadata defaults to these values\n\t-s\tSpecifies what to use as the default stylesheet (defaults to /style.css)\n\t-l\tSpecifies what to use as the default language (defaults to \"en\"\nRSS Options (all of which need to be specified to support RSS):\n\t-u\tSpecifies website url\n\t-t\tSpecifies website title\n\t-d\tSpecifies website description\n",
 	    programname);
 }
 
@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
     int sflag, lflag;
     sflag = lflag = 0;
     int opt;
-    while ((opt = getopt(argc, argv, "i:o:s:l:u:t:d:n")) != -1) {
+    while ((opt = getopt(argc, argv, "i:o:s:l:u:t:d:")) != -1) {
 	switch (opt) {
 	case 'i':
 	    inputdir = optarg;
@@ -57,13 +57,13 @@ int main(int argc, char *argv[])
 	case 'd':
 	    rssdesc = optarg;
 	    break;
-	case 'n':
-	    createrss = 0;
-	    break;
 	default:
 	    printusage(argv[0]);
 	    return 1;
 	}
+    }
+    if (rsstitle == NULL || rssdesc == NULL || url == NULL) {
+	createrss = 0;
     }
     if (!sflag) {
 	strncpy(defaults.css, "/style.css", sizeof("/style.css") + 1);

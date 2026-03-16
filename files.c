@@ -4,6 +4,9 @@
 #include "metadata.h"
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <string.h>
 /* static memory buffers used for buffers */
@@ -290,7 +293,7 @@ void strwrite(char *dest, char *src, int start, int maxsize)
     }
 }
 
-void addfilename(char *filename)
+void addfilename(char *filename, int html)
 {
     int inlen = strlen(inpath);
     int outlen = strlen(outpath);
@@ -299,8 +302,40 @@ void addfilename(char *filename)
     outpath[outlen] = '/';
     strwrite(inpath, filename, inlen + 1, 4095 - inlen - 1);
     strwrite(outpath, filename, outlen + 1, 4095 - outlen - 1);
-    strncat(inpath, ".md", 3);
-    strncat(outpath, ".html", 5);
+    if (html) {
+	strncat(inpath, ".md", 3);
+	strncat(outpath, ".html", 5);
+    }
+}
+
+void copyfile()
+{
+
+    int sfd, dfd;
+    char *src, *dest;
+    size_t filesize;
+
+    /* SOURCE */
+    sfd = open(inpath, O_RDONLY);
+    filesize = lseek(sfd, 0, SEEK_END);
+
+    src = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE, sfd, 0);
+
+    /* DESTINATION */
+    dfd = open(outpath, O_RDWR | O_CREAT, 0660);
+
+    ftruncate(dfd, filesize);
+
+    dest = mmap(NULL, filesize, PROT_READ | PROT_WRITE, MAP_SHARED, dfd, 0);
+
+    /* COPY */
+    memcpy(dest, src, filesize);
+    munmap(src, filesize);
+    munmap(dest, filesize);
+    close(sfd);
+    close(dfd);
+    printf("copied %s to %s\n", inpath, outpath);
+    return;
 }
 
 /* recursedir uses a static char buffer, the leadingpath variable is used for recursion purposes*/
@@ -346,8 +381,13 @@ void recursedir(char *leadingpath)
 	    char *filetype = strrchr(de->d_name, '.');
 	    if (strcmp(filetype, ".md") == 0) {
 		*filetype = '\0';
-		addfilename(de->d_name);
+		addfilename(de->d_name, 1);
 		handlefiles(inpath, outpath);
+		*strrchr(inpath, '/') = '\0';
+		*strrchr(outpath, '/') = '\0';
+	    } else {
+		addfilename(de->d_name, 0);
+		copyfile();
 		*strrchr(inpath, '/') = '\0';
 		*strrchr(outpath, '/') = '\0';
 	    }
