@@ -1,5 +1,5 @@
 { "title": "Bonobo Static Site Generator", "description": "a static site generator so simple and easy that a Bonobo could use it",
-"language": "en-US", "css": "/chimp.css" }
+"language": "en-US", "css": "/chimp.css", "date": "01/01/2025" }
 # Why Bonobo?
 I created this static site generator because I hate complexity. I wanted to create the simplest and cleanest static site generator I could.
 Bonobo is based off some design principles:

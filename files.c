@@ -125,6 +125,7 @@ void splitList(struct Filenode *source, struct Filenode **front,
 	slow->next = NULL;
     }
 }
+
 /* mergesort function called mrgsrt to avoid name conflicts with OpenBSD's stdlib */
 void mrgsrt(struct Filenode **headRef)
 {
@@ -264,15 +265,13 @@ void handlefiles(char *inputfile, char *outputfile)
 	time_t date;
 	if (metad.date[0] != '\0') {
 	    date = datetotime(metad.date);
+	    /* only add file to RSS if date is specified */
+	    if (date != -1) {
+		appendlist(urlpath, metad, date);
+	    } else {
+		fputs("error processing date", stderr);
+	    }
 	}
-	if (metad.date[0] == '\0' || date == -1) {
-	    /* if date isn't found in file metadata we use the input file modification date */
-	    struct stat fst;
-	    int fd = fileno(fp);
-	    fstat(fd, &fst);
-	    date = fst.st_mtime;
-	}
-	appendlist(urlpath, metad, date);
     }
     fclose(fp);
     printf("succesfully wrote file %s\n", outputfile);
